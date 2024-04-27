@@ -4,7 +4,7 @@ from typing import Tuple, List
 
 import numpy as np
 
-from search import Problem, Node
+from search import Problem, Node, breadth_first_tree_search
 
 class PipeManiaState:
     """Describes the current state of the problem.
@@ -263,7 +263,8 @@ def rotate_Lpiece(pipe_piece: str) -> str:
 if __name__ == "__main__":
     board = Board.parse_instance()
     board.print()
+    print("---------")
     problem = PipeMania(board)
-    s0 = PipeManiaState(board)
-    s1 = problem.result(s0, (0, 1, False))
-    s1.board.print()
+    #goal_node = breadth_first_tree_search(problem)
+    #print("Solution:\n", goal_node.state.board.print(), sep="")
+    
