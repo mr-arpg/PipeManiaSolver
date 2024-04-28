@@ -10,7 +10,7 @@ This project aims to solve instances of the PipeMania puzzle game using artifici
 
 The program reads an instance of PipeMania from the standard input in the specified format:
 
-![PipeMania Dictionary](Projeto AI/dictionary.png)
+![PipeMania Dictionary](dictionary.png)
 
 It then applies an AI algorithm to find the solution, i.e., the arrangement of pipes that forms a complete pipeline with no leaks.
 
