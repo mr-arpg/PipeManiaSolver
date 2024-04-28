@@ -1,4 +1,9 @@
 """Pipe Mania Solver for the AI course's project."""
+
+# Grupo 00:
+# 00000 Nome1
+# 00000 Nome2
+
 from sys import stdin
 from typing import Tuple, List
 
