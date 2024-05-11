@@ -1,15 +1,14 @@
 """Pipe Mania Solver for the AI course's project."""
 
-# Grupo 00:
-# 00000 Nome1
-# 00000 Nome2
+# Grupo 84:
+# 100290 Armando Gonçalves
+# 100326 João Rodrigues
 
-from sys import stdin
-from typing import Tuple, List
+from sys import stdin, stdout
 
 import numpy as np
 
-from search import Problem, Node, breadth_first_tree_search, depth_first_tree_search
+from search import Problem, Node, depth_first_tree_search, astar_search
 
 
 class PipeManiaState:
@@ -21,13 +20,14 @@ class PipeManiaState:
     """
     state_id = 0
 
-    def __init__(self, board):
+    def __init__(self, board, current_action_piece):
         """Initializes the class.
 
         Args:
             board (Board): An instance of the Board class.
         """
         self.board = board
+        self.current_action_piece = current_action_piece
         self.id = PipeManiaState.state_id
         PipeManiaState.state_id += 1
 
@@ -53,8 +53,117 @@ class Board:
               the board and their corresponding orientation.
         """
         self.board = board
+        self.fixed_pieces, self.possible_actions = self.preprocessing()
 
-    def adjacent_vertical_values(self, row: int, col: int) -> Tuple[str, str]:
+    def preprocessing(self):
+
+        # List with the tuples of row and col of pieces that
+        # are fixed.
+
+        fixed_pieces = []
+        possible_actions = {}
+        rows, cols = self.board.shape
+
+        #Top Left corner
+        if self.board[0][0][0] == 'V':
+            self.board[0][0] = 'VB'
+            fixed_pieces.append((0,0))
+        
+        if self.board[0][0][0] == 'F':
+            possible_actions[(0,0)] = ['FB', 'FD']
+
+        #Top right corner
+        if self.board[0][cols-1][0] == 'V':
+            self.board[0][cols-1] = 'VE'
+            fixed_pieces.append((0,cols-1))
+
+        if self.board[0][cols-1][0] == 'F':
+            possible_actions[(0,cols-1)] = ['FB','FE']
+
+        #Bottom left corner
+        if self.board[rows-1][0][0] == 'V':
+            self.board[rows-1][0] = 'VD'
+            fixed_pieces.append((rows-1,0))
+
+        if self.board[rows-1][0][0] == 'F':
+            possible_actions[(rows-1,0)] = ['FC','FD']
+
+        #Bottom right corner
+        if self.board[rows-1][cols-1][0] == 'V':
+            self.board[rows-1][cols-1] = 'VC'
+            fixed_pieces.append((rows-1,cols-1))
+
+        if self.board[rows-1][cols-1][0] == 'F':
+            possible_actions[(rows-1,cols-1)] = ['FC','FE']
+
+        #Top edge
+        for col in range(1, cols-1):
+            if self.board[0][col][0] == 'B':
+                self.board[0][col] = 'BB'
+                fixed_pieces.append((0, col))
+
+            if self.board[0][col][0] == 'L':
+                self.board[0][col] = 'LH'
+                fixed_pieces.append((0, col))
+
+            if self.board[0][col][0] == 'F':
+                possible_actions[(0,col)] = ['FB','FE','FD']
+
+            if self.board[0][col][0] == 'V':
+                possible_actions[(0,col)] = ['VB','VE']
+
+        #Left edge
+        for row in range(1, rows-1):
+            if self.board[row][0][0] == 'B':
+                self.board[row][0] = 'BD'
+                fixed_pieces.append((row, 0))
+
+            if self.board[row][0][0] == 'L':
+                self.board[row][0] = 'LV'
+                fixed_pieces.append((row, 0))
+
+            if self.board[row][0][0] == 'F':
+                possible_actions[(row,0)] = ['FB','FC','FD']
+
+            if self.board[row][0][0] == 'V':
+                possible_actions[(row,0)] = ['VB','VD']
+
+        #Right edge
+        for row in range(1, rows-1):
+            if self.board[row][cols-1][0] == 'B':
+                self.board[row][cols-1] = 'BE'
+                fixed_pieces.append((row, cols-1))
+
+            if self.board[row][cols-1][0] == 'L':
+                self.board[row][cols-1] = 'LV'
+                fixed_pieces.append((row, cols-1))
+
+            if self.board[row][cols-1][0] == 'F':
+                possible_actions[(row,cols-1)] = ['FB','FC','FE']
+
+            if self.board[row][cols-1][0] == 'V':
+                possible_actions[(row,cols-1)] = ['VE','VC']
+
+        #Bottom edge
+        for col in range(1, cols-1):
+            if self.board[rows-1][col][0] == 'B':
+                self.board[rows-1][col] = 'BC'
+                fixed_pieces.append((rows-1, col))
+
+            if self.board[rows-1][col][0] == 'L':
+                self.board[rows-1][col] = 'LH'
+                fixed_pieces.append((rows-1, col))
+
+            if self.board[rows-1][col][0] == 'F':
+                possible_actions[(rows-1,col)] = ['FD','FC','FE']
+
+            if self.board[rows-1][col][0] == 'V':
+                possible_actions[(rows-1,col)] = ['VD','VC']
+
+        return fixed_pieces, possible_actions
+
+
+    def adjacent_vertical_values(self, row: int, col: int):
         """Obtains the values immediately above and below a piece, respectively.
 
         When there is no piece in a certain location, it returns `None`.
@@ -72,7 +181,7 @@ class Board:
                                  1][col] if row < len(self.board) - 1 else None
         return upper_value, lower_value
 
-    def adjacent_horizontal_values(self, row: int, col: int) -> Tuple[str, str]:
+    def adjacent_horizontal_values(self, row: int, col: int):
         """Obtains the values immediately to the left and right, respectively.
 
         When there is no piece in a certain location, it returns `None`.
@@ -112,7 +221,7 @@ class Board:
         FC FC
         """
         for row in self.board:
-            print(" ".join(row))
+            stdout.write("\t".join(row) + "\n")
 
     @staticmethod
     def parse_instance():
@@ -147,45 +256,43 @@ class PipeMania(Problem):
 
     """
 
-    # , goal_state: PipeManiaState):
     def __init__(self, initial_state: PipeManiaState):
         """Initializes the class.
 
         Args:
-            initial_state (class PipeManiaState): Instance of the board's initial state.
+            initial_state (class Board): Instance of the board's initial state.
         """
         self.initial = initial_state
-        # self.goal = goal_state
 
-    def actions(self, state: PipeManiaState) -> List[Tuple[int, int, bool]]:
-        """Actions that can be performed.
+    def actions(self, state: PipeManiaState):
+        """Actions that can be performed."""
 
-        Returns a list of actions that can be executed from the given state.
-        The actions that can be performed are represented by the piece's
-        location and and integer between 1 and 3:
-            1 ---> Clockwise rotation of the piece (if not type 'L')
-            2 ---> Counter-clockwise rotation of the piece (if not type 'L')
-            3 ---> Rotation of the 'L' type piece.
-
-        Args:
-            state (class PipeManiaState): Instance of the board's current state.
-
-        Returns:
-            actions (list of tuples): List of actions that can be performed.
-        """
-        actions = []
         rows, cols = state.board.board.shape
-        for row in range(rows):
+        found_piece = False
+        actions = []
+        r, c = state.current_action_piece
+        
+        for row in range(r, rows):
             for col in range(cols):
-                if state.board.board[row][col] != 'L':
-                    actions.append((row, col, 1))  # Rotate clockwise
-                    actions.append((row, col, 2))  # Rotate counterclockwise
+                if (row==r and col<=c) or ((row, col) in state.board.fixed_pieces):
+                    pass
 
-                if state.board.board[row][col] == 'L':
-                    actions.append((row, col, 3))  # Rotate 'L' piece
+                else:
+                    if (row, col) in state.board.possible_actions:
+                        actions = [(row, col, orientation) for orientation in state.board.possible_actions[(row, col)]]
+                    
+                    else:
+                        actions = [(row, col, orientation) for orientation in possible_orientations[state.board.board[row][col][0]]]
+                    
+                    found_piece = True
+                    break
+            
+            if found_piece:
+                break
+
         return actions
 
-    def result(self, state: PipeManiaState, action: Tuple[int, int, int]) -> PipeManiaState:
+    def result(self, state: PipeManiaState, action):
         """Result of a given action.
 
         Given an action, the necessary rotations are performed
@@ -204,18 +311,11 @@ class PipeMania(Problem):
             result_state (class PipeManiaState): Instance of the board's 
               resulting state.
         """
-        row, col, action_type = action
-        new_board = np.copy(state.board.board)  # Maybe usar o deepcopy?
-        if action_type == 1:
-            # Rotate the pipe piece clockwise
-            new_board[row][col] = rotate_clockwise(new_board[row][col])
-        if action_type == 2:
-            # Rotate the pipe piece counterclockwise
-            new_board[row][col] = rotate_counterclockwise(new_board[row][col])
-        if action_type == 3:
-            new_board[row][col] = rotate_Lpiece(new_board[row][col])
+        row, col, orientation = action
+        new_board = np.copy(state.board.board)
+        new_board[row][col] = orientation
 
-        return PipeManiaState(Board(new_board))
+        return PipeManiaState(Board(new_board), (row, col))
 
     def goal_test(self, state: PipeManiaState) -> bool:
 
@@ -226,57 +326,56 @@ class PipeMania(Problem):
                 upper, lower = state.board.adjacent_vertical_values(row, col)
                 left, right = state.board.adjacent_horizontal_values(row, col)
 
-                if upper in adjacent_pieces['upper']:
-                    counter += 1
-
-                if lower in adjacent_pieces['lower']:
-                    counter += 1
-
-                if right in adjacent_pieces['right']:
-                    counter += 1
-
-                if left in adjacent_pieces['left']:
-                    counter += 1
-
                 piece = state.board.get_value(row, col)
-                if piece[0] == 'F' and counter != 1:
-                    return False
+                locations = possible_adjacent_locations[piece]
+                for location in locations:
+                    if (location == 'upper') and (upper in adjacent_pieces['upper']):
+                        counter += 1
 
-                if piece[0] == 'B' and counter != 3:
-                    return False
+                    if (location == 'lower') and (lower in adjacent_pieces['lower']):
+                        counter += 1
 
-                if (piece[0] == 'L' or piece[0] == 'V') and counter != 2:
+                    if (location == 'right') and (right in adjacent_pieces['right']):
+                        counter += 1
+
+                    if (location == 'left') and (left in adjacent_pieces['left']):
+                        counter += 1
+
+                if counter != len(locations):
                     return False
 
         return True
 
     def h(self, node: Node) -> int:
-        """ Heuristic function used for A* search. """
-        # For now, return 0 (trivial heuristic)
-        return 0
+        """ Heuristic function used for A* search. Number of pieces not connected."""
+        heu = 0
+        rows, cols = node.state.board.board.shape
+        for row in range(rows):
+            for col in range(cols):
+                counter = 0
+                upper, lower = node.state.board.adjacent_vertical_values(row, col)
+                left, right = node.state.board.adjacent_horizontal_values(row, col)
 
+                piece = node.state.board.get_value(row, col)
+                locations = possible_adjacent_locations[piece]
+                for location in locations:
+                    if (location == 'upper') and (upper in adjacent_pieces['upper']):
+                        counter += 1
 
-# Dictionary for clockwise rotation
-clockwise_rotation = {
-    'B': 'E',
-    'E': 'C',
-    'C': 'D',
-    'D': 'B'
-}
+                    if (location == 'lower') and (lower in adjacent_pieces['lower']):
+                        counter += 1
 
-# Dictionary for counterclockwise rotation
-counterclockwise_rotation = {
-    'C': 'E',
-    'E': 'B',
-    'B': 'D',
-    'D': 'C'
-}
+                    if (location == 'right') and (right in adjacent_pieces['right']):
+                        counter += 1
 
-# Dictionary for 'L' piece rotation
-L_piece_rotation = {
-    'H': 'V',
-    'V': 'H'
-}
+                    if (location == 'left') and (left in adjacent_pieces['left']):
+                        counter += 1
+
+                #loc_len = len(locations)
+                if counter != len(locations):
+                    heu += 1   
+        return heu
+
 
 # Dictionary for types of pieces that can be adjacent
 adjacent_pieces = {
@@ -286,46 +385,39 @@ adjacent_pieces = {
     'lower': ['FC', 'BC', 'BD', 'BE', 'VC', 'VD', 'LV']
 }
 
+possible_adjacent_locations = {
+    'FC': ['upper'],
+    'FB': ['lower'],
+    'FE': ['left'],
+    'FD': ['right'],
+    'BC': ['upper', 'left', 'right'],
+    'BB': ['lower', 'left', 'right'],
+    'BE': ['left', 'upper', 'lower'],
+    'BD': ['right', 'upper', 'lower'],
+    'VC': ['upper', 'left'],
+    'VB': ['right', 'lower'],
+    'VE': ['left', 'lower'],
+    'VD': ['right', 'upper'],
+    'LH': ['left', 'right'],
+    'LV': ['upper', 'lower']
+}
 
-def rotate_clockwise(pipe_piece: str) -> str:
-    """Rotate the given piece clockwise.
-
-    Args: 
-        pipe_piece (str): String that represents the type of piece
-          and its orientation.
-    """
-    return pipe_piece[0] + clockwise_rotation[pipe_piece[1]]
-
-
-def rotate_counterclockwise(pipe_piece: str) -> str:
-    """Rotate the given piece counterclockwise.
-
-    Args: 
-        pipe_piece (str): String that represents the type of piece
-          and its orientation.
-    """
-    return pipe_piece[0] + counterclockwise_rotation[pipe_piece[1]]
-
-
-def rotate_Lpiece(pipe_piece: str) -> str:
-    """Rotates the 'L' piece of the board.
-
-    Args: 
-        pipe_piece (str): String that represents the type of piece
-          and its orientation.
-    """
-    return pipe_piece[0] + L_piece_rotation[pipe_piece[1]]
-
+possible_orientations = {
+    'F': ['FB', 'FC', 'FD', 'FE'],
+    'B': ['BB', 'BC', 'BD', 'BE'],
+    'V': ['VB', 'VC', 'VD', 'VE'],
+    'L': ['LH', 'LV']
+}
 
 # Example usage:
 if __name__ == "__main__":
     initial_board = Board.parse_instance()
-    initial_board.print()
-    print("---------")
-    s0 = PipeManiaState(initial_board)
+    #initial_board.print()
+    #print("---------")
+    s0 = PipeManiaState(initial_board, (0,-1)) # as to start with -1 otherwise it does not generate actions for (0,0) piece.
     problem = PipeMania(s0)
-    goal_node = depth_first_tree_search(problem)
-    print('Is goal?', problem.goal_test(goal_node.state))
-    print("Solution:")
+    goal_node = astar_search(problem)
+    #print('Is goal?', problem.goal_test(goal_node.state))
+    #print("Solution:")
     goal_node.state.board.print()
     
