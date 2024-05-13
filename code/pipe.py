@@ -8,7 +8,7 @@ from sys import stdin, stdout
 
 import numpy as np
 
-from search import Problem, Node, depth_first_tree_search, astar_search
+from search import Problem, Node, astar_search
 
 
 class PipeManiaState:
@@ -284,6 +284,7 @@ class PipeMania(Problem):
                     else:
                         actions = [(row, col, orientation) for orientation in possible_orientations[state.board.board[row][col][0]]]
                     
+                    actions = check_compatibility(row, col, actions, state)
                     found_piece = True
                     break
             
@@ -375,6 +376,44 @@ class PipeMania(Problem):
                 if counter != len(locations):
                     heu += 1   
         return heu
+
+
+def check_compatibility(row, col, initial_actions, state):
+    """Checks compatibility of actions.
+    
+    Given the pieces already searched in the tree (since a piece
+    by piece search is being implemented) it checks compatibility of
+    the initial_actions with the pieces already checked in that state.
+    If there is no way of them forming a solution, that part of the
+    tree can be ignored, thus saving time.
+    """
+    possible_actions = [item for item in initial_actions]
+    upper, _ = state.board.adjacent_vertical_values(row, col)
+    left, _ = state.board.adjacent_horizontal_values(row, col)
+
+    upper_not_none = True
+    left_not_none = True
+
+    if upper is None:
+        upper_not_none = False
+
+    if left is None:
+        left_not_none = False
+
+    for action in initial_actions:
+        was_it_removed = False
+        if upper_not_none:
+            if 'lower' in possible_adjacent_locations[upper]:
+                if action[2] not in adjacent_pieces['lower']:
+                    possible_actions.remove(action)
+                    was_it_removed = True
+
+        if left_not_none and not was_it_removed:
+            if 'right' in possible_adjacent_locations[left]:
+                if action[2] not in adjacent_pieces['right']:
+                    possible_actions.remove(action)
+
+    return possible_actions
 
 
 # Dictionary for types of pieces that can be adjacent
