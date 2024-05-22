@@ -160,6 +160,54 @@ class Board:
             if self.board[rows-1][col][0] == 'V':
                 possible_actions[(rows-1,col)] = ['VD','VC']
 
+            
+        '''
+        # Loop to infer and fix as many points on the board as possible
+
+
+        dummy = fixed_pieces.copy() # dummy variable to enter the loop
+
+        updated = True
+        while updated:
+            updated = False
+            new_fixed_pieces = []            
+
+            for (r, c) in dummy:
+                
+                # Check the neighboring cells and update possible actions
+                if r < rows:
+                    possible_actions[(r + 1, c)] = check_neighbour(r, c, 'upper', self.board)
+                    if len(possible_actions[(r + 1, c)]) == 1:
+                        self.board[r + 1][c] = possible_actions[(r + 1, c)][0]
+                        new_fixed_pieces.append((r + 1, c))
+                        updated = True
+
+                if r >= 0:
+                    possible_actions[(r - 1, c)] = check_neighbour(r, c, 'lower', self.board)
+                    if len(possible_actions[(r - 1, c)]) == 1:
+                        self.board[r - 1][c] = possible_actions[(r - 1, c)][0]
+                        new_fixed_pieces.append((r - 1, c))
+                        updated = True
+
+                if c >= 0:
+                    possible_actions[(r, c - 1)] = check_neighbour(r, c, 'left', self.board)
+                    if len(possible_actions[(r, c - 1)]) == 1:
+                        self.board[r][c - 1] = possible_actions[(r, c - 1)][0]
+                        new_fixed_pieces.append((r, c - 1))
+                        updated = True
+
+                if c < cols:
+                    possible_actions[(r, c + 1)] = check_neighbour(r, c, 'right', self.board)
+                    if len(possible_actions[(r, c + 1)]) == 1:
+                        self.board[r][c + 1] = possible_actions[(r, c + 1)][0]
+                        new_fixed_pieces.append((r, c + 1))
+                        updated = True
+
+            fixed_pieces.extend(new_fixed_pieces)
+            dummy = new_fixed_pieces       
+
+         ''' 
+
         return fixed_pieces, possible_actions
 
 
@@ -377,6 +425,32 @@ class PipeMania(Problem):
                     heu += 1   
         return heu
 
+def check_neighbour(row, col, direction, board):
+    """Determine possible pieces for the neighboring cell in a given direction on the grid.
+
+    Args:
+        row (int): The row index of the current cell.
+        col (int): The column index of the current cell.
+        direction (str): The direction to check ('upper', 'lower', 'left', 'right').
+        board (2D list): The current state of the board.
+
+    Returns:
+        list: A list of possible pieces (actions) for the neighboring cell in the given direction.
+    """
+    current_piece = board[row][col]
+    possible_pieces = []
+
+    piece_orientation = current_piece[1]
+
+    if piece_orientation in possible_adjacent_locations:
+        if direction in possible_adjacent_locations[piece_orientation]:
+            for piece, orientations in possible_orientations.items():
+                for orientation in orientations:
+                    if orientation in adjacent_pieces[direction]:
+                        possible_pieces.append(orientation)
+
+    return possible_pieces
+
 
 def check_compatibility(row, col, initial_actions, state):
     """Checks compatibility of actions.
@@ -402,12 +476,16 @@ def check_compatibility(row, col, initial_actions, state):
 
     for action in initial_actions:
         was_it_removed = False
+        # Check if the piece is compatible with the adjacent pieces
         if upper_not_none:
+            # Check if the upper piece is compatible with having a piece below it
             if 'lower' in possible_adjacent_locations[upper]:
+                # If the orientation is not on the list of possible orientations, it's removed
                 if action[2] not in adjacent_pieces['lower']:
                     possible_actions.remove(action)
                     was_it_removed = True
 
+        # also check if the left piece is compatible with having a piece to its right
         if left_not_none and not was_it_removed:
             if 'right' in possible_adjacent_locations[left]:
                 if action[2] not in adjacent_pieces['right']:
@@ -453,7 +531,7 @@ if __name__ == "__main__":
     initial_board = Board.parse_instance()
     #initial_board.print()
     #print("---------")
-    s0 = PipeManiaState(initial_board, (0,-1)) # as to start with -1 otherwise it does not generate actions for (0,0) piece.
+    s0 = PipeManiaState(initial_board, (0,-1)) # has to start with -1 otherwise it does not generate actions for (0,0) piece.
     problem = PipeMania(s0)
     goal_node = astar_search(problem)
     #print('Is goal?', problem.goal_test(goal_node.state))
