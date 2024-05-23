@@ -8,7 +8,7 @@ from sys import stdin, stdout
 
 import numpy as np
 
-from search import Problem, Node, astar_search
+from search import Problem, Node, depth_first_tree_search
 
 
 class PipeManiaState:
@@ -43,7 +43,7 @@ class PipeManiaState:
 class Board:
     """Describes important actions to access information about the board."""
 
-    def __init__(self, board: np.ndarray):
+    def __init__(self, board: np.ndarray, fixed_pieces, possible_actions):
         """Initializes the class.
 
         Args:
@@ -53,7 +53,8 @@ class Board:
               the board and their corresponding orientation.
         """
         self.board = board
-        self.fixed_pieces, self.possible_actions = self.preprocessing()
+        self.fixed_pieces = fixed_pieces
+        self.possible_actions = possible_actions
 
     def preprocessing(self):
 
@@ -64,39 +65,39 @@ class Board:
         possible_actions = {}
         rows, cols = self.board.shape
 
-        #Top Left corner
+        # Top Left corner
         if self.board[0][0][0] == 'V':
             self.board[0][0] = 'VB'
-            fixed_pieces.append((0,0))
-        
-        if self.board[0][0][0] == 'F':
-            possible_actions[(0,0)] = ['FB', 'FD']
+            fixed_pieces.append((0, 0))
 
-        #Top right corner
+        if self.board[0][0][0] == 'F':
+            possible_actions[(0, 0)] = ['FB', 'FD']
+
+        # Top right corner
         if self.board[0][cols-1][0] == 'V':
             self.board[0][cols-1] = 'VE'
-            fixed_pieces.append((0,cols-1))
+            fixed_pieces.append((0, cols-1))
 
         if self.board[0][cols-1][0] == 'F':
-            possible_actions[(0,cols-1)] = ['FB','FE']
+            possible_actions[(0, cols-1)] = ['FB', 'FE']
 
-        #Bottom left corner
+        # Bottom left corner
         if self.board[rows-1][0][0] == 'V':
             self.board[rows-1][0] = 'VD'
-            fixed_pieces.append((rows-1,0))
+            fixed_pieces.append((rows-1, 0))
 
         if self.board[rows-1][0][0] == 'F':
-            possible_actions[(rows-1,0)] = ['FC','FD']
+            possible_actions[(rows-1, 0)] = ['FC', 'FD']
 
-        #Bottom right corner
+        # Bottom right corner
         if self.board[rows-1][cols-1][0] == 'V':
             self.board[rows-1][cols-1] = 'VC'
-            fixed_pieces.append((rows-1,cols-1))
+            fixed_pieces.append((rows-1, cols-1))
 
         if self.board[rows-1][cols-1][0] == 'F':
-            possible_actions[(rows-1,cols-1)] = ['FC','FE']
+            possible_actions[(rows-1, cols-1)] = ['FC', 'FE']
 
-        #Top edge
+        # Top edge
         for col in range(1, cols-1):
             if self.board[0][col][0] == 'B':
                 self.board[0][col] = 'BB'
@@ -107,12 +108,12 @@ class Board:
                 fixed_pieces.append((0, col))
 
             if self.board[0][col][0] == 'F':
-                possible_actions[(0,col)] = ['FB','FE','FD']
+                possible_actions[(0, col)] = ['FB', 'FE', 'FD']
 
             if self.board[0][col][0] == 'V':
-                possible_actions[(0,col)] = ['VB','VE']
+                possible_actions[(0, col)] = ['VB', 'VE']
 
-        #Left edge
+        # Left edge
         for row in range(1, rows-1):
             if self.board[row][0][0] == 'B':
                 self.board[row][0] = 'BD'
@@ -123,12 +124,12 @@ class Board:
                 fixed_pieces.append((row, 0))
 
             if self.board[row][0][0] == 'F':
-                possible_actions[(row,0)] = ['FB','FC','FD']
+                possible_actions[(row, 0)] = ['FB', 'FC', 'FD']
 
             if self.board[row][0][0] == 'V':
-                possible_actions[(row,0)] = ['VB','VD']
+                possible_actions[(row, 0)] = ['VB', 'VD']
 
-        #Right edge
+        # Right edge
         for row in range(1, rows-1):
             if self.board[row][cols-1][0] == 'B':
                 self.board[row][cols-1] = 'BE'
@@ -139,12 +140,12 @@ class Board:
                 fixed_pieces.append((row, cols-1))
 
             if self.board[row][cols-1][0] == 'F':
-                possible_actions[(row,cols-1)] = ['FB','FC','FE']
+                possible_actions[(row, cols-1)] = ['FB', 'FC', 'FE']
 
             if self.board[row][cols-1][0] == 'V':
-                possible_actions[(row,cols-1)] = ['VE','VC']
+                possible_actions[(row, cols-1)] = ['VE', 'VC']
 
-        #Bottom edge
+        # Bottom edge
         for col in range(1, cols-1):
             if self.board[rows-1][col][0] == 'B':
                 self.board[rows-1][col] = 'BC'
@@ -155,13 +156,86 @@ class Board:
                 fixed_pieces.append((rows-1, col))
 
             if self.board[rows-1][col][0] == 'F':
-                possible_actions[(rows-1,col)] = ['FD','FC','FE']
+                possible_actions[(rows-1, col)] = ['FD', 'FC', 'FE']
 
             if self.board[rows-1][col][0] == 'V':
-                possible_actions[(rows-1,col)] = ['VD','VC']
+                possible_actions[(rows-1, col)] = ['VD', 'VC']
 
-        return fixed_pieces, possible_actions
+        # Loop to infer and fix as many points on the board as possible
 
+        dummy = [item for item in fixed_pieces]
+
+        updated = True
+        while updated:
+            updated = False
+            new_fixed_pieces = []   
+
+            for (r, c) in dummy:
+                
+                # Check the neighboring cells and update possible actions
+                if r > 0:
+                    if (r-1, c) not in fixed_pieces:
+                        
+                        possible_pieces = check_neighbour(r, c, r-1, c, 'upper', self.board, possible_actions.get((r - 1, c), []))
+                            
+                        if possible_actions.get((r - 1, c)) != possible_pieces:
+                            possible_actions[(r - 1, c)] = possible_pieces
+                            updated = True
+                        #possible_actions[(r - 1, c)] = possible_pieces
+
+                            if len(possible_actions[(r - 1, c)]) == 1:
+                                self.board[r - 1][c] = possible_actions[(r - 1, c)][0]
+                                new_fixed_pieces.append((r - 1, c))
+
+                if r < rows - 1:
+                    if (r+1, c) not in fixed_pieces:
+                        
+                        possible_pieces = check_neighbour(r, c, r+1, c, 'lower', self.board, possible_actions.get((r + 1, c), []))
+                            
+                        if possible_actions.get((r + 1, c)) != possible_pieces:
+                            possible_actions[(r + 1, c)] = possible_pieces
+                            updated = True
+                        #possible_actions[(r + 1, c)] = possible_pieces
+
+                            if len(possible_actions[(r + 1, c)]) == 1:
+                                self.board[r + 1][c] = possible_actions[(r + 1, c)][0]
+                                new_fixed_pieces.append((r + 1, c))
+
+                if c > 0:
+                    if (r, c-1) not in fixed_pieces:
+                    
+                        possible_pieces = check_neighbour(r, c, r, c - 1, 'left', self.board, possible_actions.get((r, c - 1), []))
+                            
+
+                        if possible_actions.get((r, c - 1)) != possible_pieces:
+                            possible_actions[(r, c - 1)] = possible_pieces
+                            updated = True
+                        #possible_actions[(r, c - 1)] = possible_pieces
+                            if len(possible_actions[(r, c - 1)]) == 1:
+                                self.board[r][c - 1] = possible_actions[(r, c - 1)][0]
+                                new_fixed_pieces.append((r, c - 1))
+
+                if c < cols - 1:
+                    if (r, c+1) not in fixed_pieces:
+                    
+                        possible_pieces = check_neighbour(r, c, r, c + 1, 'right', self.board, possible_actions.get((r, c + 1), []))
+                            
+                        if possible_actions.get((r, c + 1)) != possible_pieces:
+                            possible_actions[(r, c + 1)] = possible_pieces
+                            updated = True
+                        #possible_actions[(r, c + 1)] = possible_pieces
+                            if len(possible_actions[(r, c + 1)]) == 1:
+                                self.board[r][c + 1] = possible_actions[(r, c + 1)][0]
+                                new_fixed_pieces.append((r, c + 1))
+
+            dummy = new_fixed_pieces
+            fixed_pieces.extend(new_fixed_pieces)
+            fixed_pieces = list(set(fixed_pieces))
+
+        #print(fixed_pieces)
+        #print(len(fixed_pieces))
+        self.fixed_pieces = list(set(fixed_pieces))
+        self.possible_actions = possible_actions
 
     def adjacent_vertical_values(self, row: int, col: int):
         """Obtains the values immediately above and below a piece, respectively.
@@ -237,7 +311,7 @@ class Board:
         """
         lines = stdin.readlines()
         board = np.array([line.strip().split() for line in lines])
-        return Board(board)
+        return Board(board, [], {})
 
 
 class PipeMania(Problem):
@@ -271,23 +345,25 @@ class PipeMania(Problem):
         found_piece = False
         actions = []
         r, c = state.current_action_piece
-        
+
         for row in range(r, rows):
             for col in range(cols):
-                if (row==r and col<=c) or ((row, col) in state.board.fixed_pieces):
+                if (row == r and col <= c) or ((row, col) in state.board.fixed_pieces):
                     pass
 
                 else:
                     if (row, col) in state.board.possible_actions:
-                        actions = [(row, col, orientation) for orientation in state.board.possible_actions[(row, col)]]
-                    
+                        actions = [(row, col, orientation)
+                                   for orientation in state.board.possible_actions[(row, col)]]
+
                     else:
-                        actions = [(row, col, orientation) for orientation in possible_orientations[state.board.board[row][col][0]]]
-                    
+                        actions = [(row, col, orientation)
+                                   for orientation in possible_orientations[state.board.board[row][col][0]]]
+
                     actions = check_compatibility(row, col, actions, state)
                     found_piece = True
                     break
-            
+
             if found_piece:
                 break
 
@@ -298,11 +374,6 @@ class PipeMania(Problem):
 
         Given an action, the necessary rotations are performed
         and a new state is created and then returned.
-
-        The actions are performed using dictionaries with the correct
-        movements of the pieces given the type of rotation asked.
-        This way there is no need to use multiple 'if' statements
-        and a lot of time may be saved.
 
         Args:
             state (class PipeManiaState): Instance of the board's current state.
@@ -316,71 +387,137 @@ class PipeMania(Problem):
         new_board = np.copy(state.board.board)
         new_board[row][col] = orientation
 
-        return PipeManiaState(Board(new_board), (row, col))
+        return PipeManiaState(Board(new_board, state.board.fixed_pieces, state.board.possible_actions), (row, col))
 
     def goal_test(self, state: PipeManiaState) -> bool:
 
         rows, cols = state.board.board.shape
-        for row in range(rows):
-            for col in range(cols):
-                counter = 0
-                upper, lower = state.board.adjacent_vertical_values(row, col)
-                left, right = state.board.adjacent_horizontal_values(row, col)
+        total_pieces = rows*cols
+        checked_pieces = []
+        neighbours = []
 
-                piece = state.board.get_value(row, col)
-                locations = possible_adjacent_locations[piece]
-                for location in locations:
-                    if (location == 'upper') and (upper in adjacent_pieces['upper']):
-                        counter += 1
+        for adjacent_loc in possible_adjacent_locations[state.board.board[0][0]]:
+            row, col = row_col_correspondence[adjacent_loc]
+            if state.board.board[row][col] not in adjacent_pieces[adjacent_loc]:
+                return False
+            
+            neighbours.append((row, col))
 
-                    if (location == 'lower') and (lower in adjacent_pieces['lower']):
-                        counter += 1
+        checked_pieces = [(0,0)]
 
-                    if (location == 'right') and (right in adjacent_pieces['right']):
-                        counter += 1
+        there_are_neighbours = True
+        while there_are_neighbours:
+            new_neighbours = []
 
-                    if (location == 'left') and (left in adjacent_pieces['left']):
-                        counter += 1
+            for (row, col) in neighbours:
+                for adjacent_loc in possible_adjacent_locations[state.board.board[row][col]]:
+                    row_n = row + row_col_correspondence[adjacent_loc][0]
+                    col_n = col + row_col_correspondence[adjacent_loc][1]
+                    if (row_n, col_n) in checked_pieces:
+                        pass
+                    else:
+                        if state.board.board[row_n][col_n] not in adjacent_pieces[adjacent_loc]:
+                            return False
+                    
+                        new_neighbours.append((row_n, col_n))
+                
+                checked_pieces.append((row, col))
 
-                if counter != len(locations):
-                    return False
+            neighbours = [neig for neig in new_neighbours]
+            if not new_neighbours:
+                there_are_neighbours = False
+
+        if len(checked_pieces) != total_pieces:
+            return False
 
         return True
 
     def h(self, node: Node) -> int:
         """ Heuristic function used for A* search. Number of pieces not connected."""
-        heu = 0
+
         rows, cols = node.state.board.board.shape
-        for row in range(rows):
-            for col in range(cols):
-                counter = 0
-                upper, lower = node.state.board.adjacent_vertical_values(row, col)
-                left, right = node.state.board.adjacent_horizontal_values(row, col)
+        total_pieces = rows*cols
+        checked_pieces = []
+        neighbours = []
 
-                piece = node.state.board.get_value(row, col)
-                locations = possible_adjacent_locations[piece]
-                for location in locations:
-                    if (location == 'upper') and (upper in adjacent_pieces['upper']):
-                        counter += 1
+        for adjacent_loc in possible_adjacent_locations[node.state.board.board[0][0]]:
+            row, col = row_col_correspondence[adjacent_loc]
+            if node.state.board.board[row][col] not in adjacent_pieces[adjacent_loc]:
+                return total_pieces - len(checked_pieces)
+            
+            neighbours.append((row, col))
 
-                    if (location == 'lower') and (lower in adjacent_pieces['lower']):
-                        counter += 1
+        checked_pieces = [(0,0)]
 
-                    if (location == 'right') and (right in adjacent_pieces['right']):
-                        counter += 1
+        there_are_neighbours = True
+        while there_are_neighbours:
+            new_neighbours = []
 
-                    if (location == 'left') and (left in adjacent_pieces['left']):
-                        counter += 1
+            for neighbour in neighbours:
+                row, col = neighbour
+                for adjacent_loc in possible_adjacent_locations[node.state.board.board[row][col]]:
+                    row_n = row + row_col_correspondence[adjacent_loc][0]
+                    col_n = col + row_col_correspondence[adjacent_loc][1]
+                    if (row_n, col_n) in checked_pieces:
+                        pass
+                    else:
+                        if node.state.board.board[row_n][col_n] not in adjacent_pieces[adjacent_loc]:
+                            return total_pieces - len(checked_pieces)
+                    
+                        new_neighbours.append((row_n, col_n))
+                
+                checked_pieces.append(neighbour)
 
-                #loc_len = len(locations)
-                if counter != len(locations):
-                    heu += 1   
-        return heu
+            neighbours = [neig for neig in new_neighbours]
+            if not new_neighbours:
+                there_are_neighbours = False
 
+        return total_pieces - len(checked_pieces)
+
+def check_neighbour(row, col, row_n, col_n, direction, board, initial_pos_actions):
+    """Determine possible pieces for the neighboring cell in a given direction on the grid.
+
+    Args:
+        row (int): The row index of the current cell.
+        col (int): The column index of the current cell.
+        row (int): The row index of the neighbour cell.
+        col (int): The column index of the neighbour cell.
+        direction (str): The direction to check ('upper', 'lower', 'left', 'right').
+        board (2D list): The current state of the board.
+
+    Returns:
+        list: A list of possible pieces (actions) for the neighboring cell in the given direction.
+    """
+    current_piece = board[row][col]
+    neighbour_piece = board[row_n][col_n]
+    possible_pieces = []
+
+    #print("Current piece: ", current_piece)
+    #print("Neighbour piece: ", neighbour_piece)
+    #print("Initial_pos_actions: ", initial_pos_actions)
+
+    if not initial_pos_actions:
+        if direction in possible_adjacent_locations[current_piece]:
+            for piece in adjacent_pieces[direction]:
+                if piece[0] == neighbour_piece[0]:
+                    possible_pieces.append(piece)
+                
+            return possible_pieces
+        
+        return [item for item in possible_orientations[neighbour_piece[0]] if item not in adjacent_pieces[direction]]
+
+    if direction in possible_adjacent_locations[current_piece]:
+        return [item for item in initial_pos_actions if item in adjacent_pieces[direction]]
+    
+    # Exemplo. A current piece é 'LV' e estamos a checkar o vizinho à esquerda que é 
+    # do tipo 'B'. A peça 'LV' não pode ter ligações à sua esquerda, por isso, neste
+    # caso, se a neighbour piece pertencer às peças que podem estar à esquerda (pq têm
+    # ligação para a direita) podemos eliminá-las.
+    return [item for item in initial_pos_actions if item not in adjacent_pieces[direction]]
 
 def check_compatibility(row, col, initial_actions, state):
     """Checks compatibility of actions.
-    
+
     Given the pieces already searched in the tree (since a piece
     by piece search is being implemented) it checks compatibility of
     the initial_actions with the pieces already checked in that state.
@@ -388,30 +525,52 @@ def check_compatibility(row, col, initial_actions, state):
     tree can be ignored, thus saving time.
     """
     possible_actions = [item for item in initial_actions]
-    upper, _ = state.board.adjacent_vertical_values(row, col)
-    left, _ = state.board.adjacent_horizontal_values(row, col)
-
-    upper_not_none = True
-    left_not_none = True
-
-    if upper is None:
-        upper_not_none = False
-
-    if left is None:
-        left_not_none = False
+    upper, lower = state.board.adjacent_vertical_values(row, col)
+    left, right = state.board.adjacent_horizontal_values(row, col)
 
     for action in initial_actions:
         was_it_removed = False
-        if upper_not_none:
+        if not upper is None:
             if 'lower' in possible_adjacent_locations[upper]:
                 if action[2] not in adjacent_pieces['lower']:
                     possible_actions.remove(action)
                     was_it_removed = True
 
-        if left_not_none and not was_it_removed:
+            else:
+                if action[2] in adjacent_pieces['lower']:
+                    possible_actions.remove(action)
+                    was_it_removed = True
+
+        if (not left is None) and not was_it_removed:
             if 'right' in possible_adjacent_locations[left]:
                 if action[2] not in adjacent_pieces['right']:
                     possible_actions.remove(action)
+
+            else:
+                if action[2] in adjacent_pieces['right']:
+                    possible_actions.remove(action)
+                    was_it_removed = True
+
+        if (not lower is None) and not was_it_removed and ((row+1, col) in state.board.fixed_pieces):
+            if 'upper' in possible_adjacent_locations[lower]:
+                if action[2] not in adjacent_pieces['upper']:
+                    possible_actions.remove(action)
+                    was_it_removed = True
+
+            else:
+                if action[2] in adjacent_pieces['upper']:
+                    possible_actions.remove(action)
+                    was_it_removed = True
+
+        if (not right is None) and not was_it_removed and ((row, col+1) in state.board.fixed_pieces):
+            if 'left' in possible_adjacent_locations[right]:
+                if action[2] not in adjacent_pieces['left']:
+                    possible_actions.remove(action)
+
+            else:
+                if action[2] in adjacent_pieces['left']:
+                    possible_actions.remove(action)
+                    was_it_removed = True
 
     return possible_actions
 
@@ -448,15 +607,20 @@ possible_orientations = {
     'L': ['LH', 'LV']
 }
 
+row_col_correspondence = {
+    'lower': (1, 0),
+    'upper': (-1, 0),
+    'right': (0, 1),
+    'left': (0, -1)
+}
+
 # Example usage:
 if __name__ == "__main__":
     initial_board = Board.parse_instance()
+    initial_board.preprocessing()
     #initial_board.print()
-    #print("---------")
-    s0 = PipeManiaState(initial_board, (0,-1)) # as to start with -1 otherwise it does not generate actions for (0,0) piece.
+    # Has to start with -1 otherwise it does not generate actions for (0,0) piece.
+    s0 = PipeManiaState(initial_board, (0, -1))
     problem = PipeMania(s0)
-    goal_node = astar_search(problem)
-    #print('Is goal?', problem.goal_test(goal_node.state))
-    #print("Solution:")
+    goal_node = depth_first_tree_search(problem)
     goal_node.state.board.print()
-    
