@@ -6,6 +6,12 @@ Welcome to our PipeMania Solver project! 🚀
 
 This project aims to solve instances of the PipeMania puzzle game using artificial intelligence algorithms. PipeMania is a puzzle game where you need to connect pipes to form a complete pipeline without any leaks.
 
+
+
+https://github.com/user-attachments/assets/0fcccf8a-6bf4-467d-89af-8f3183c872f8
+
+
+
 ## How It Works
 
 The program reads an instance of PipeMania from the standard input in the specified format:
